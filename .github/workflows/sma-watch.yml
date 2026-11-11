@@ -1,0 +1,48 @@
+name: 200d SMA Watch
+
+on:
+  schedule:
+    # Mo–Fr 21:30 UTC = nach US-Schluss (22:30 Uhr MEZ / 23:30 Uhr MESZ).
+    # GitHub startet geplante Läufe manchmal mit etwas Verspätung.
+    - cron: "30 21 * * 1-5"
+  workflow_dispatch:
+    inputs:
+      force:
+        description: "Push-Nachricht auch ohne neuen Handelstag senden (Test)"
+        type: boolean
+        default: true
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sma-watch
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: SMA prüfen und benachrichtigen
+        env:
+          NTFY_TOPIC: ${{ secrets.NTFY_TOPIC }}
+          FORCE_NOTIFY: ${{ github.event_name == 'workflow_dispatch' && inputs.force }}
+          ONLY_ON_CROSS: ${{ vars.ONLY_ON_CROSS }}
+          PAGES_URL: https://${{ github.repository_owner }}.github.io/${{ github.event.repository.name }}/
+        run: python sma_watch.py
+
+      - name: Status speichern
+        run: |
+          git config user.name "sma-watch-bot"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add docs/status.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Status $(date -u +%F)"
+            git push
+          fi

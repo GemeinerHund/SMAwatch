@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="SMA200">
+<meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
+<title>200d SMA – S&amp;P 500 &amp; SOX</title>
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M6 22 L13 15 L18 19 L26 9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
+<style>
+  :root {
+    color-scheme: light;
+    --bg: #f4f4f2;
+    --surface-1: #fcfcfb;
+    --border: #e4e3df;
+    --grid: #ecebe7;
+    --text-primary: #0b0b0b;
+    --text-secondary: #52514e;
+    --text-muted: #7a7974;
+    --series-1: #2a78d6;
+    --series-2: #eb6834;
+    --good: #0f7a3d;
+    --good-bg: #e3f3e8;
+    --critical: #c62828;
+    --critical-bg: #fbe6e5;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      color-scheme: dark;
+      --bg: #111110;
+      --surface-1: #1a1a19;
+      --border: #2c2c2a;
+      --grid: #262624;
+      --text-primary: #f0efec;
+      --text-secondary: #c3c2b7;
+      --text-muted: #8f8e86;
+      --series-1: #3987e5;
+      --series-2: #d95926;
+      --good: #4cc27a;
+      --good-bg: #16301f;
+      --critical: #f07070;
+      --critical-bg: #3a1a1a;
+    }
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; background: var(--bg); color: var(--text-primary);
+    font: 15px/1.45 -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    padding: max(16px, env(safe-area-inset-top)) 16px max(24px, env(safe-area-inset-bottom));
+  }
+  main { max-width: 760px; margin: 0 auto; }
+  header h1 { font-size: 20px; margin: 4px 0 2px; letter-spacing: -0.01em; }
+  header p { margin: 0 0 16px; color: var(--text-secondary); font-size: 13px; }
+  .card {
+    background: var(--surface-1); border: 1px solid var(--border); border-radius: 14px;
+    padding: 16px; margin-bottom: 14px;
+  }
+  .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 12px; }
+  .name { font-weight: 600; font-size: 16px; }
+  .date { color: var(--text-muted); font-size: 12px; }
+  .pill {
+    display: inline-flex; align-items: center; gap: 6px; white-space: nowrap;
+    font-weight: 700; font-size: 13px; padding: 6px 10px; border-radius: 999px;
+  }
+  .pill.up { color: var(--good); background: var(--good-bg); }
+  .pill.down { color: var(--critical); background: var(--critical-bg); }
+  .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 6px; }
+  .stat .k { color: var(--text-muted); font-size: 12px; }
+  .stat .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
+  .since { color: var(--text-secondary); font-size: 13px; margin-bottom: 8px; }
+  .cross { font-weight: 600; color: var(--text-primary); }
+  .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 6px 0 2px; }
+  .legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
+  .chart { position: relative; }
+  .chart svg { display: block; width: 100%; height: 190px; touch-action: pan-y; }
+  .tip {
+    position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
+    border-radius: 8px; padding: 6px 8px; font-size: 12px; line-height: 1.35; white-space: nowrap;
+    box-shadow: 0 4px 14px rgba(0,0,0,.12); opacity: 0; transition: opacity .1s; top: 4px;
+    font-variant-numeric: tabular-nums;
+  }
+  .tip .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
+  details { margin-top: 6px; font-size: 13px; color: var(--text-secondary); }
+  table { width: 100%; border-collapse: collapse; font-variant-numeric: tabular-nums; margin-top: 6px; }
+  th, td { text-align: right; padding: 3px 4px; border-bottom: 1px solid var(--grid); }
+  th:first-child, td:first-child { text-align: left; }
+  .err { color: var(--critical); font-size: 13px; }
+  footer { color: var(--text-muted); font-size: 12px; text-align: center; margin-top: 8px; }
+</style>
+</head>
+<body>
+<main>
+  <header>
+    <h1>200-Tage-Linie</h1>
+    <p id="updated">Lade Status …</p>
+  </header>
+  <div id="cards"></div>
+  <footer>Schlusskurse vs. 200-Tage-SMA · Aktualisierung jeden US-Börsentag nach Handelsschluss</footer>
+</main>
+
+<script>
+const ORDER = ["spx", "sox"];
+const nf = (x, d = 0) => x.toLocaleString("de-DE", { minimumFractionDigits: d, maximumFractionDigits: d });
+const df = iso => { const [y, m, d] = iso.split("-"); return `${d}.${m}.${y}`; };
+const css = v => getComputedStyle(document.documentElement).getPropertyValue(v).trim();
+
+async function load() {
+  const res = await fetch("status.json?t=" + Date.now(), { cache: "no-store" });
+  if (!res.ok) throw new Error("status.json nicht gefunden – ist der erste Lauf schon durch?");
+  return res.json();
+}
+
+function card(key, name, r) {
+  const up = r.above;
+  const el = document.createElement("section");
+  el.className = "card";
+  const sign = r.diff_pct >= 0 ? "+" : "";
+  el.innerHTML = `
+    <div class="top">
+      <div><div class="name">${name}</div><div class="date">Schluss ${df(r.date)}</div></div>
+      <span class="pill ${up ? "up" : "down"}">${up ? "▲ ÜBER" : "▼ UNTER"} 200d SMA</span>
+    </div>
+    <div class="stats">
+      <div class="stat"><div class="k">Schluss</div><div class="v">${nf(r.close)}</div></div>
+      <div class="stat"><div class="k">SMA 200</div><div class="v">${nf(r.sma200)}</div></div>
+      <div class="stat"><div class="k">Abstand</div><div class="v">${sign}${nf(r.diff_pct, 1)} %</div></div>
+    </div>
+    <div class="since">${r.crossed ? `<span class="cross">Heute gekreuzt.</span> ` : ""}${up ? "Darüber" : "Darunter"} seit ${df(r.since)} (${r.streak_days} Handelstag${r.streak_days === 1 ? "" : "e"})</div>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>Schlusskurs</span><span><i style="background:var(--series-2)"></i>SMA 200</span></div>
+    <div class="chart"><svg role="img" aria-label="${name}: Schlusskurs und 200-Tage-SMA, letzte 12 Monate"></svg><div class="tip"></div></div>
+    <details><summary>Tabelle (letzte 20 Tage)</summary><table><thead><tr><th>Datum</th><th>Schluss</th><th>SMA 200</th></tr></thead><tbody></tbody></table></details>`;
+  const h = r.history;
+  const tb = el.querySelector("tbody");
+  for (let i = h.dates.length - 1; i >= Math.max(0, h.dates.length - 20); i--) {
+    tb.insertAdjacentHTML("beforeend", `<tr><td>${df(h.dates[i])}</td><td>${nf(h.close[i])}</td><td>${nf(h.sma200[i])}</td></tr>`);
+  }
+  requestAnimationFrame(() => drawChart(el.querySelector(".chart"), h));
+  return el;
+}
+
+function drawChart(wrap, h) {
+  const svg = wrap.querySelector("svg"), tip = wrap.querySelector(".tip");
+  const W = wrap.clientWidth || 600, H = 190, L = 6, R = 52, T = 10, B = 22;
+  svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
+  const n = h.dates.length;
+  const all = h.close.concat(h.sma200);
+  let lo = Math.min(...all), hi = Math.max(...all);
+  const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
+  const x = i => L + (i / (n - 1)) * (W - L - R);
+  const y = v => T + (1 - (v - lo) / (hi - lo)) * (H - T - B);
+  const path = arr => arr.map((v, i) => (i ? "L" : "M") + x(i).toFixed(1) + " " + y(v).toFixed(1)).join("");
+
+  // Raster + Achsenbeschriftung (rechts)
+  const ticks = 4; let g = "";
+  for (let k = 0; k <= ticks; k++) {
+    const v = lo + (hi - lo) * k / ticks, yy = y(v);
+    g += `<line x1="${L}" x2="${W - R}" y1="${yy}" y2="${yy}" stroke="${css("--grid")}" stroke-width="1"/>`;
+    g += `<text x="${W - R + 6}" y="${yy + 4}" font-size="10" fill="${css("--text-muted")}">${nf(v)}</text>`;
+  }
+  // Monatsmarken
+  let lastM = "";
+  h.dates.forEach((d, i) => {
+    const m = d.slice(0, 7);
+    if (m !== lastM && i > 0 && Number(d.slice(5, 7)) % 3 === 1) {
+      g += `<text x="${x(i)}" y="${H - 6}" font-size="10" fill="${css("--text-muted")}" text-anchor="middle">${d.slice(5, 7)}/${d.slice(2, 4)}</text>`;
+    }
+    lastM = m;
+  });
+  svg.innerHTML = g +
+    `<path d="${path(h.sma200)}" fill="none" stroke="${css("--series-2")}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="${path(h.close)}" fill="none" stroke="${css("--series-1")}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<line class="xh" y1="${T}" y2="${H - B}" stroke="${css("--text-muted")}" stroke-width="1" opacity="0"/>` +
+    `<circle class="d1" r="4" fill="${css("--series-1")}" stroke="${css("--surface-1")}" stroke-width="2" opacity="0"/>` +
+    `<circle class="d2" r="4" fill="${css("--series-2")}" stroke="${css("--surface-1")}" stroke-width="2" opacity="0"/>`;
+
+  const xh = svg.querySelector(".xh"), d1 = svg.querySelector(".d1"), d2 = svg.querySelector(".d2");
+  const show = ev => {
+    const rect = svg.getBoundingClientRect();
+    const px = (ev.clientX - rect.left) * (W / rect.width);
+    const i = Math.max(0, Math.min(n - 1, Math.round((px - L) / (W - L - R) * (n - 1))));
+    const xi = x(i);
+    xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", 1);
+    d1.setAttribute("cx", xi); d1.setAttribute("cy", y(h.close[i])); d1.setAttribute("opacity", 1);
+    d2.setAttribute("cx", xi); d2.setAttribute("cy", y(h.sma200[i])); d2.setAttribute("opacity", 1);
+    tip.innerHTML = `<b>${df(h.dates[i])}</b><br><span class="sw" style="background:var(--series-1)"></span>Schluss ${nf(h.close[i])}<br><span class="sw" style="background:var(--series-2)"></span>SMA 200 ${nf(h.sma200[i])}`;
+    const tw = tip.offsetWidth, sx = xi * rect.width / W;
+    tip.style.left = Math.min(rect.width - tw, Math.max(0, sx + (sx > rect.width / 2 ? -tw - 10 : 10))) + "px";
+    tip.style.opacity = 1;
+  };
+  const hide = () => { tip.style.opacity = 0; [xh, d1, d2].forEach(e => e.setAttribute("opacity", 0)); };
+  svg.onpointermove = show; svg.onpointerdown = show; svg.onpointerleave = hide;
+}
+
+load().then(s => {
+  const u = new Date(s.updated_utc);
+  document.getElementById("updated").textContent =
+    "Stand: " + u.toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" }) + " Uhr";
+  const cards = document.getElementById("cards");
+  for (const k of ORDER) if (s.indices[k]) cards.appendChild(card(k, s.names[k], s.indices[k]));
+  if (s.errors && s.errors.length) cards.insertAdjacentHTML("beforeend", `<p class="err">⚠ ${s.errors.join(" | ")}</p>`);
+  let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => {
+    document.querySelectorAll(".card").forEach((c, j) => drawChart(c.querySelector(".chart"), s.indices[ORDER[j]].history));
+  }, 150); });
+}).catch(e => { document.getElementById("updated").textContent = e.message; });
+</script>
+</body>
+</html>

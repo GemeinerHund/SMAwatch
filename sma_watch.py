@@ -1,13 +1,15 @@
 #!/usr/bin/env python3
-"""200-Tage-SMA-Wächter für S&P 500 und PHLX Semiconductor (SOX).
+"""SMA-Wächter: S&P 500 vs. 200d SMA, PHLX Semiconductor (SOX) vs. 160d SMA.
 
 Läuft jeden US-Börsentag 2 Stunden nach Handelsstart (11:30 Uhr New York,
 = 17:30 Uhr deutscher Zeit) als GitHub Action. Vergleicht den aktuellen Kurs mit
 dem 200d SMA, schickt eine Push-Nachricht über ntfy und schreibt docs/status.json
 für die Status-Webseite.
 
-SMA-Berechnung: die letzten 199 Schlusskurse plus der aktuelle Kurs, also so,
-wie ein Live-Chart (z. B. TradingView) den 200er SMA im laufenden Handel zeigt.
+SMA-Berechnung: die letzten n-1 Schlusskurse plus der aktuelle Kurs, also so,
+wie ein Live-Chart (z. B. TradingView) den SMA im laufenden Handel zeigt.
+Signale: S&P 500 BUY wenn > SMA200; sonst HOLD wenn SOX > SMA160, sonst SELL.
+         SOX BUY wenn > SMA160, sonst HOLD.
 "Kreuzung" heißt: heute auf der anderen Seite als beim gestrigen Schlusskurs.
 
 Umgebungsvariablen:
@@ -31,15 +33,15 @@ import urllib.request
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-SMA_LEN = 200
+MAX_SMA = 200  # längster SMA, bestimmt die benötigte Historie
 HISTORY_DAYS = 260  # ca. 1 Jahr für den Chart auf der Webseite
 STATUS_FILE = Path(__file__).parent / "docs" / "status.json"
 NY = ZoneInfo("America/New_York")
 BERLIN = ZoneInfo("Europe/Berlin")
 
 INDICES = [
-    {"key": "spx", "name": "S&P 500", "short": "S&P 500", "yahoo": "^GSPC", "stooq": "^spx"},
-    {"key": "sox", "name": "PHLX SOX (Halbleiter)", "short": "SOX", "yahoo": "^SOX", "stooq": "^sox"},
+    {"key": "spx", "name": "S&P 500", "short": "S&P 500", "yahoo": "^GSPC", "stooq": "^spx", "sma": 200},
+    {"key": "sox", "name": "PHLX SOX (Halbleiter)", "short": "SOX", "yahoo": "^SOX", "stooq": "^sox", "sma": 160},
 ]
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -101,7 +103,7 @@ def load_series(idx: dict):
         try:
             rows, qt = fn(sym)
             rows = sorted(dict(rows).items())  # deduplizieren + sortieren
-            if len(rows) >= SMA_LEN + 1:
+            if len(rows) >= MAX_SMA + 1:
                 return rows, name, qt
             errors.append(f"{name}: nur {len(rows)} Tage")
         except Exception as e:  # noqa: BLE001
@@ -110,28 +112,29 @@ def load_series(idx: dict):
 
 
 # ---------------------------------------------------------------- Rechnen
-def analyse(rows: list[tuple[str, float]]) -> dict:
+def analyse(rows: list[tuple[str, float]], n: int) -> dict:
     dates = [d for d, _ in rows]
     px = [c for _, c in rows]
     sma: list[float | None] = [None] * len(px)
-    s = sum(px[:SMA_LEN])
-    sma[SMA_LEN - 1] = s / SMA_LEN
-    for i in range(SMA_LEN, len(px)):
-        s += px[i] - px[i - SMA_LEN]
-        sma[i] = s / SMA_LEN
+    s = sum(px[:n])
+    sma[n - 1] = s / n
+    for i in range(n, len(px)):
+        s += px[i] - px[i - n]
+        sma[i] = s / n
 
     i = len(px) - 1
     above = px[i] > sma[i]
     prev_above = px[i - 1] > sma[i - 1]  # gestriger Schlusskurs vs. gestriger SMA
     j = i
-    while j - 1 >= SMA_LEN - 1 and (px[j - 1] > sma[j - 1]) == above:
+    while j - 1 >= n - 1 and (px[j - 1] > sma[j - 1]) == above:
         j -= 1
 
-    start = max(SMA_LEN - 1, len(px) - HISTORY_DAYS)
+    start = max(n - 1, len(px) - HISTORY_DAYS)
     return {
         "date": dates[i],
         "price": round(px[i], 2),
-        "sma200": round(sma[i], 2),
+        "sma_len": n,
+        "sma": round(sma[i], 2),
         "diff_pct": round((px[i] / sma[i] - 1) * 100, 2),
         "above": above,
         "prev_above": prev_above,
@@ -141,7 +144,7 @@ def analyse(rows: list[tuple[str, float]]) -> dict:
         "history": {
             "dates": dates[start:],
             "close": [round(c, 2) for c in px[start:]],
-            "sma200": [round(x, 2) for x in sma[start:]],
+            "sma": [round(x, 2) for x in sma[start:]],
         },
     }
 
@@ -156,13 +159,30 @@ def de_date(iso: str) -> str:
     return dt.date.fromisoformat(iso).strftime("%d.%m.%Y")
 
 
+def signals(results: dict) -> dict:
+    """S&P 500: BUY wenn > SMA200; sonst HOLD wenn SOX > SMA160, sonst SELL.
+    SOX: BUY wenn > SMA160, sonst HOLD."""
+    out = {}
+    spx, sox = results.get("spx"), results.get("sox")
+    if sox:
+        out["sox"] = "BUY" if sox["above"] else "HOLD"
+    if spx:
+        if spx["above"]:
+            out["spx"] = "BUY"
+        elif sox:
+            out["spx"] = "HOLD" if sox["above"] else "SELL"
+        else:
+            out["spx"] = "?"  # SOX-Daten fehlen, Signal nicht bestimmbar
+    return out
+
+
 def line_for(idx: dict, r: dict) -> str:
     arrow = "▲ über" if r["above"] else "▼ unter"
     sign = "+" if r["diff_pct"] >= 0 else ""
     days = r["streak_days"]
     cross = " (seit gestern gekreuzt!)" if r["crossed"] else ""
-    return (f"{idx['short']} {arrow} SMA200{cross}\n"
-            f"  {de_num(r['price'])} vs. {de_num(r['sma200'])} ({sign}{de_num(r['diff_pct'], 1)} %)\n"
+    return (f"{r['signal']} {idx['short']} {arrow} SMA{r['sma_len']}{cross}\n"
+            f"  {de_num(r['price'])} vs. {de_num(r['sma'])} ({sign}{de_num(r['diff_pct'], 1)} %)\n"
             f"  seit {de_date(r['since'])} · {days} Handelstag{'e' if days != 1 else ''}")
 
 
@@ -212,7 +232,7 @@ def main() -> int:
     for idx in INDICES:
         try:
             rows, src, qt = load_series(idx)
-            r = analyse(rows)
+            r = analyse(rows, idx["sma"])
             r["source"] = src
             r["live"] = r["date"] == today
             results[idx["key"]] = r
@@ -228,6 +248,9 @@ def main() -> int:
 
     if not force and not any(r["live"] for r in results.values()):
         print("Kein Kurs von heute – US-Börse vermutlich geschlossen (Feiertag)."); return 0
+
+    for k, sig in signals(results).items():
+        results[k]["signal"] = sig
 
     qt = max(quote_times) if quote_times else None
     kurszeit = (dt.datetime.fromtimestamp(qt, BERLIN).strftime("%H:%M Uhr") if qt else "")
@@ -248,15 +271,15 @@ def main() -> int:
     crosses = [(i, results[i["key"]]) for i in INDICES if i["key"] in results and results[i["key"]]["crossed"]]
     sent = False
     if crosses:
-        parts = [f"{i['short']} {'über' if r['above'] else 'unter'}" for i, r in crosses]
+        parts = [f"{i['short']} {'über' if r['above'] else 'unter'} SMA{r['sma_len']}" for i, r in crosses]
         up = all(r["above"] for _, r in crosses)
-        ntfy("Kreuzung 200d SMA: " + ", ".join(parts), msg, 5,
+        sig = " | ".join(f"{i['short']}: {results[i['key']]['signal']}" for i in INDICES if i["key"] in results)
+        ntfy(f"🚨 {sig} – Kreuzung " + ", ".join(parts), msg, 5,
              ["rotating_light", "chart_with_upwards_trend" if up else "chart_with_downwards_trend"])
         sent = True
     elif not only_cross or force:
-        status = " | ".join(f"{i['short']} {'▲' if results[i['key']]['above'] else '▼'}"
-                            for i in INDICES if i["key"] in results)
-        ntfy(f"200d SMA {kurszeit}: {status}".replace("  ", " "), msg, 3, ["bar_chart"])
+        sig = " | ".join(f"{i['short']}: {results[i['key']]['signal']}" for i in INDICES if i["key"] in results)
+        ntfy(f"{sig} ({kurszeit})".replace(" ()", ""), msg, 3, ["bar_chart"])
         sent = True
 
     STATUS_FILE.parent.mkdir(parents=True, exist_ok=True)
@@ -266,7 +289,6 @@ def main() -> int:
                       if qt else None),
         # Tagessperre nur, wenn regulär gemeldet wurde (ein Test blockiert den Tag nicht)
         "sent_date": today if (not force and (sent or only_cross)) else old.get("sent_date"),
-        "sma_len": SMA_LEN,
         "names": {i["key"]: i["name"] for i in INDICES},
         "errors": errors,
         "indices": results,

@@ -5,10 +5,10 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="mobile-web-app-capable" content="yes">
-<meta name="apple-mobile-web-app-title" content="SMA200">
+<meta name="apple-mobile-web-app-title" content="SMAwatch">
 <meta name="theme-color" content="#fcfcfb" media="(prefers-color-scheme: light)">
 <meta name="theme-color" content="#1a1a19" media="(prefers-color-scheme: dark)">
-<title>200d SMA – S&amp;P 500 &amp; SOX</title>
+<title>SMAwatch – S&amp;P 500 &amp; SOX</title>
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='7' fill='%232a78d6'/%3E%3Cpath d='M6 22 L13 15 L18 19 L26 9' stroke='white' stroke-width='3' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E">
 <style>
   :root {
@@ -26,6 +26,8 @@
     --good-bg: #e3f3e8;
     --critical: #c62828;
     --critical-bg: #fbe6e5;
+    --warning: #8a5a00;
+    --warning-bg: #fdf0d5;
   }
   @media (prefers-color-scheme: dark) {
     :root {
@@ -43,6 +45,8 @@
       --good-bg: #16301f;
       --critical: #f07070;
       --critical-bg: #3a1a1a;
+      --warning: #f0b440;
+      --warning-bg: #3a2c10;
     }
   }
   * { box-sizing: border-box; }
@@ -67,6 +71,12 @@
   }
   .pill.up { color: var(--good); background: var(--good-bg); }
   .pill.down { color: var(--critical); background: var(--critical-bg); }
+  .sig { display: inline-block; font-weight: 800; font-size: 22px; letter-spacing: .04em;
+         padding: 4px 14px; border-radius: 10px; margin-bottom: 10px; }
+  .sig.BUY { color: var(--good); background: var(--good-bg); }
+  .sig.HOLD { color: var(--warning); background: var(--warning-bg); }
+  .sig.SELL { color: var(--critical); background: var(--critical-bg); }
+  .rule { color: var(--text-muted); font-size: 12px; margin: -4px 0 10px; }
   .stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; margin: 14px 0 6px; }
   .stat .k { color: var(--text-muted); font-size: 12px; }
   .stat .v { font-size: 18px; font-weight: 600; font-variant-numeric: tabular-nums; }
@@ -94,11 +104,11 @@
 <body>
 <main>
   <header>
-    <h1>200-Tage-Linie</h1>
+    <h1>SMAwatch</h1>
     <p id="updated">Lade Status …</p>
   </header>
   <div id="cards"></div>
-  <footer>Kurs vs. 200-Tage-SMA · Aktualisierung jeden US-Börsentag 2 Std. nach Handelsstart (ca. 17:30 Uhr)</footer>
+  <footer>S&amp;P 500 vs. 200-Tage-SMA · SOX vs. 160-Tage-SMA · Aktualisierung jeden US-Börsentag 2 Std. nach Handelsstart (ca. 17:30 Uhr)</footer>
 </main>
 
 <script>
@@ -118,35 +128,39 @@ function card(key, name, r) {
   const el = document.createElement("section");
   el.className = "card";
   const sign = r.diff_pct >= 0 ? "+" : "";
+  const rule = key === "spx"
+    ? "BUY wenn S&amp;P &gt; SMA200 · sonst HOLD wenn SOX &gt; SMA160 · sonst SELL"
+    : "BUY wenn SOX &gt; SMA160 · sonst HOLD";
   el.innerHTML = `
+    ${r.signal ? `<div class="sig ${r.signal}" aria-label="Signal ${r.signal}">${r.signal}</div><div class="rule">${rule}</div>` : ""}
     <div class="top">
       <div><div class="name">${name}</div><div class="date">${r.live ? "Live-Kurs" : "Schluss"} ${df(r.date)}</div></div>
-      <span class="pill ${up ? "up" : "down"}">${up ? "▲ ÜBER" : "▼ UNTER"} 200d SMA</span>
+      <span class="pill ${up ? "up" : "down"}">${up ? "▲ ÜBER" : "▼ UNTER"} ${r.sma_len}d SMA</span>
     </div>
     <div class="stats">
       <div class="stat"><div class="k">Kurs</div><div class="v">${nf(r.price)}</div></div>
-      <div class="stat"><div class="k">SMA 200</div><div class="v">${nf(r.sma200)}</div></div>
+      <div class="stat"><div class="k">SMA ${r.sma_len}</div><div class="v">${nf(r.sma)}</div></div>
       <div class="stat"><div class="k">Abstand</div><div class="v">${sign}${nf(r.diff_pct, 1)} %</div></div>
     </div>
     <div class="since">${r.crossed ? `<span class="cross">Seit gestern gekreuzt.</span> ` : ""}${up ? "Darüber" : "Darunter"} seit ${df(r.since)} (${r.streak_days} Handelstag${r.streak_days === 1 ? "" : "e"})</div>
-    <div class="legend"><span><i style="background:var(--series-1)"></i>Kurs</span><span><i style="background:var(--series-2)"></i>SMA 200</span></div>
-    <div class="chart"><svg role="img" aria-label="${name}: Kurs und 200-Tage-SMA, letzte 12 Monate"></svg><div class="tip"></div></div>
-    <details><summary>Tabelle (letzte 20 Tage)</summary><table><thead><tr><th>Datum</th><th>Schluss</th><th>SMA 200</th></tr></thead><tbody></tbody></table></details>`;
+    <div class="legend"><span><i style="background:var(--series-1)"></i>Kurs</span><span><i style="background:var(--series-2)"></i>SMA ${r.sma_len}</span></div>
+    <div class="chart"><svg role="img" aria-label="${name}: Kurs und ${r.sma_len}-Tage-SMA, letzte 12 Monate"></svg><div class="tip"></div></div>
+    <details><summary>Tabelle (letzte 20 Tage)</summary><table><thead><tr><th>Datum</th><th>Schluss</th><th>SMA ${r.sma_len}</th></tr></thead><tbody></tbody></table></details>`;
   const h = r.history;
   const tb = el.querySelector("tbody");
   for (let i = h.dates.length - 1; i >= Math.max(0, h.dates.length - 20); i--) {
-    tb.insertAdjacentHTML("beforeend", `<tr><td>${df(h.dates[i])}</td><td>${nf(h.close[i])}</td><td>${nf(h.sma200[i])}</td></tr>`);
+    tb.insertAdjacentHTML("beforeend", `<tr><td>${df(h.dates[i])}</td><td>${nf(h.close[i])}</td><td>${nf(h.sma[i])}</td></tr>`);
   }
-  requestAnimationFrame(() => drawChart(el.querySelector(".chart"), h));
+  requestAnimationFrame(() => drawChart(el.querySelector(".chart"), h, r.sma_len));
   return el;
 }
 
-function drawChart(wrap, h) {
+function drawChart(wrap, h, n_sma) {
   const svg = wrap.querySelector("svg"), tip = wrap.querySelector(".tip");
   const W = wrap.clientWidth || 600, H = 190, L = 6, R = 52, T = 10, B = 22;
   svg.setAttribute("viewBox", `0 0 ${W} ${H}`);
   const n = h.dates.length;
-  const all = h.close.concat(h.sma200);
+  const all = h.close.concat(h.sma);
   let lo = Math.min(...all), hi = Math.max(...all);
   const pad = (hi - lo) * 0.06; lo -= pad; hi += pad;
   const x = i => L + (i / (n - 1)) * (W - L - R);
@@ -170,7 +184,7 @@ function drawChart(wrap, h) {
     lastM = m;
   });
   svg.innerHTML = g +
-    `<path d="${path(h.sma200)}" fill="none" stroke="${css("--series-2")}" stroke-width="2" stroke-linejoin="round"/>` +
+    `<path d="${path(h.sma)}" fill="none" stroke="${css("--series-2")}" stroke-width="2" stroke-linejoin="round"/>` +
     `<path d="${path(h.close)}" fill="none" stroke="${css("--series-1")}" stroke-width="2" stroke-linejoin="round"/>` +
     `<line class="xh" y1="${T}" y2="${H - B}" stroke="${css("--text-muted")}" stroke-width="1" opacity="0"/>` +
     `<circle class="d1" r="4" fill="${css("--series-1")}" stroke="${css("--surface-1")}" stroke-width="2" opacity="0"/>` +
@@ -184,8 +198,8 @@ function drawChart(wrap, h) {
     const xi = x(i);
     xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", 1);
     d1.setAttribute("cx", xi); d1.setAttribute("cy", y(h.close[i])); d1.setAttribute("opacity", 1);
-    d2.setAttribute("cx", xi); d2.setAttribute("cy", y(h.sma200[i])); d2.setAttribute("opacity", 1);
-    tip.innerHTML = `<b>${df(h.dates[i])}</b><br><span class="sw" style="background:var(--series-1)"></span>Kurs ${nf(h.close[i])}<br><span class="sw" style="background:var(--series-2)"></span>SMA 200 ${nf(h.sma200[i])}`;
+    d2.setAttribute("cx", xi); d2.setAttribute("cy", y(h.sma[i])); d2.setAttribute("opacity", 1);
+    tip.innerHTML = `<b>${df(h.dates[i])}</b><br><span class="sw" style="background:var(--series-1)"></span>Kurs ${nf(h.close[i])}<br><span class="sw" style="background:var(--series-2)"></span>SMA ${n_sma} ${nf(h.sma[i])}`;
     const tw = tip.offsetWidth, sx = xi * rect.width / W;
     tip.style.left = Math.min(rect.width - tw, Math.max(0, sx + (sx > rect.width / 2 ? -tw - 10 : 10))) + "px";
     tip.style.opacity = 1;
@@ -202,7 +216,7 @@ load().then(s => {
   for (const k of ORDER) if (s.indices[k]) cards.appendChild(card(k, s.names[k], s.indices[k]));
   if (s.errors && s.errors.length) cards.insertAdjacentHTML("beforeend", `<p class="err">⚠ ${s.errors.join(" | ")}</p>`);
   let t; window.addEventListener("resize", () => { clearTimeout(t); t = setTimeout(() => {
-    document.querySelectorAll(".card").forEach((c, j) => drawChart(c.querySelector(".chart"), s.indices[ORDER[j]].history));
+    document.querySelectorAll(".card").forEach((c, j) => drawChart(c.querySelector(".chart"), s.indices[ORDER[j]].history, s.indices[ORDER[j]].sma_len));
   }, 150); });
 }).catch(e => { document.getElementById("updated").textContent = e.message; });
 </script>

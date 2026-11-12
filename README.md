@@ -1,10 +1,13 @@
-# 200d-SMA-Wächter: S&P 500 & PHLX SOX
+# SMAwatch: S&P 500 (200d SMA) & PHLX SOX (160d SMA)
 
 Läuft jeden US-Börsentag **2 Stunden nach Handelsstart** (11:30 Uhr New York = ca. 17:30 Uhr deutscher Zeit) als GitHub Action:
 
 - holt den aktuellen Kurs plus die Tagesschlusskurse (Yahoo Finance, Ersatzquelle Stooq)
 - vergleicht den Kurs mit dem 200-Tage-SMA (199 Schlusskurse + aktueller Kurs, wie im Live-Chart) – für S&P 500 (`^GSPC`) und SOX (`^SOX`)
-- schickt eine Push-Nachricht über **ntfy** aufs Handy
+- setzt Signale:
+  - **S&P 500**: BUY wenn S&P > SMA200 · HOLD wenn S&P < SMA200 und SOX > SMA160 · SELL wenn S&P < SMA200 und SOX < SMA160
+  - **SOX**: BUY wenn SOX > SMA160 · HOLD wenn SOX < SMA160
+- schickt eine Push-Nachricht über **ntfy** aufs Handy, Titel z. B. `S&P 500: BUY | SOX: HOLD`
   - täglich: kurzer Status (über/unter, Abstand in %, seit wann)
   - bei einer **Kreuzung** (heute auf der anderen Seite als beim gestrigen Schluss): höchste Priorität mit 🚨
 - aktualisiert die Status-Webseite (`docs/`, über GitHub Pages)

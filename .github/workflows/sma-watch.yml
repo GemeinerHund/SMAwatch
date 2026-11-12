@@ -2,13 +2,15 @@ name: 200d SMA Watch
 
 on:
   schedule:
-    # Mo–Fr 21:30 UTC = nach US-Schluss (22:30 Uhr MEZ / 23:30 Uhr MESZ).
+    # Ziel: 11:30 Uhr New York = 2 Std. nach Handelsstart (= 17:30 Uhr deutscher Zeit).
+    # Cron läuft in UTC; wegen Sommer-/Winterzeit zwei Zeiten (15:30 und 16:30 UTC).
+    # Das Skript arbeitet nur im passenden Lauf und meldet höchstens einmal pro Tag.
     # GitHub startet geplante Läufe manchmal mit etwas Verspätung.
-    - cron: "30 21 * * 1-5"
+    - cron: "30 15,16 * * 1-5"
   workflow_dispatch:
     inputs:
       force:
-        description: "Push-Nachricht auch ohne neuen Handelstag senden (Test)"
+        description: "Sofort prüfen und Push senden (Test, ignoriert Uhrzeit)"
         type: boolean
         default: true
 

@@ -98,7 +98,7 @@
     <p id="updated">Lade Status …</p>
   </header>
   <div id="cards"></div>
-  <footer>Schlusskurse vs. 200-Tage-SMA · Aktualisierung jeden US-Börsentag nach Handelsschluss</footer>
+  <footer>Kurs vs. 200-Tage-SMA · Aktualisierung jeden US-Börsentag 2 Std. nach Handelsstart (ca. 17:30 Uhr)</footer>
 </main>
 
 <script>
@@ -120,17 +120,17 @@ function card(key, name, r) {
   const sign = r.diff_pct >= 0 ? "+" : "";
   el.innerHTML = `
     <div class="top">
-      <div><div class="name">${name}</div><div class="date">Schluss ${df(r.date)}</div></div>
+      <div><div class="name">${name}</div><div class="date">${r.live ? "Live-Kurs" : "Schluss"} ${df(r.date)}</div></div>
       <span class="pill ${up ? "up" : "down"}">${up ? "▲ ÜBER" : "▼ UNTER"} 200d SMA</span>
     </div>
     <div class="stats">
-      <div class="stat"><div class="k">Schluss</div><div class="v">${nf(r.close)}</div></div>
+      <div class="stat"><div class="k">Kurs</div><div class="v">${nf(r.price)}</div></div>
       <div class="stat"><div class="k">SMA 200</div><div class="v">${nf(r.sma200)}</div></div>
       <div class="stat"><div class="k">Abstand</div><div class="v">${sign}${nf(r.diff_pct, 1)} %</div></div>
     </div>
-    <div class="since">${r.crossed ? `<span class="cross">Heute gekreuzt.</span> ` : ""}${up ? "Darüber" : "Darunter"} seit ${df(r.since)} (${r.streak_days} Handelstag${r.streak_days === 1 ? "" : "e"})</div>
-    <div class="legend"><span><i style="background:var(--series-1)"></i>Schlusskurs</span><span><i style="background:var(--series-2)"></i>SMA 200</span></div>
-    <div class="chart"><svg role="img" aria-label="${name}: Schlusskurs und 200-Tage-SMA, letzte 12 Monate"></svg><div class="tip"></div></div>
+    <div class="since">${r.crossed ? `<span class="cross">Seit gestern gekreuzt.</span> ` : ""}${up ? "Darüber" : "Darunter"} seit ${df(r.since)} (${r.streak_days} Handelstag${r.streak_days === 1 ? "" : "e"})</div>
+    <div class="legend"><span><i style="background:var(--series-1)"></i>Kurs</span><span><i style="background:var(--series-2)"></i>SMA 200</span></div>
+    <div class="chart"><svg role="img" aria-label="${name}: Kurs und 200-Tage-SMA, letzte 12 Monate"></svg><div class="tip"></div></div>
     <details><summary>Tabelle (letzte 20 Tage)</summary><table><thead><tr><th>Datum</th><th>Schluss</th><th>SMA 200</th></tr></thead><tbody></tbody></table></details>`;
   const h = r.history;
   const tb = el.querySelector("tbody");
@@ -185,7 +185,7 @@ function drawChart(wrap, h) {
     xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", 1);
     d1.setAttribute("cx", xi); d1.setAttribute("cy", y(h.close[i])); d1.setAttribute("opacity", 1);
     d2.setAttribute("cx", xi); d2.setAttribute("cy", y(h.sma200[i])); d2.setAttribute("opacity", 1);
-    tip.innerHTML = `<b>${df(h.dates[i])}</b><br><span class="sw" style="background:var(--series-1)"></span>Schluss ${nf(h.close[i])}<br><span class="sw" style="background:var(--series-2)"></span>SMA 200 ${nf(h.sma200[i])}`;
+    tip.innerHTML = `<b>${df(h.dates[i])}</b><br><span class="sw" style="background:var(--series-1)"></span>Kurs ${nf(h.close[i])}<br><span class="sw" style="background:var(--series-2)"></span>SMA 200 ${nf(h.sma200[i])}`;
     const tw = tip.offsetWidth, sx = xi * rect.width / W;
     tip.style.left = Math.min(rect.width - tw, Math.max(0, sx + (sx > rect.width / 2 ? -tw - 10 : 10))) + "px";
     tip.style.opacity = 1;
@@ -195,9 +195,9 @@ function drawChart(wrap, h) {
 }
 
 load().then(s => {
-  const u = new Date(s.updated_utc);
+  const u = new Date(s.quote_utc || s.updated_utc);
   document.getElementById("updated").textContent =
-    "Stand: " + u.toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" }) + " Uhr";
+    "Kursstand: " + u.toLocaleString("de-DE", { dateStyle: "medium", timeStyle: "short" }) + " Uhr";
   const cards = document.getElementById("cards");
   for (const k of ORDER) if (s.indices[k]) cards.appendChild(card(k, s.names[k], s.indices[k]));
   if (s.errors && s.errors.length) cards.insertAdjacentHTML("beforeend", `<p class="err">⚠ ${s.errors.join(" | ")}</p>`);

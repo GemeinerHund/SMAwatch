@@ -1,15 +1,15 @@
 # 200d-SMA-Wächter: S&P 500 & PHLX SOX
 
-Läuft jeden US-Börsentag nach Handelsschluss (Mo–Fr 21:30 UTC) als GitHub Action:
+Läuft jeden US-Börsentag **2 Stunden nach Handelsstart** (11:30 Uhr New York = ca. 17:30 Uhr deutscher Zeit) als GitHub Action:
 
-- holt die Tagesschlusskurse (Yahoo Finance, Ersatzquelle Stooq)
-- rechnet den 200-Tage-SMA für S&P 500 (`^GSPC`) und SOX (`^SOX`)
+- holt den aktuellen Kurs plus die Tagesschlusskurse (Yahoo Finance, Ersatzquelle Stooq)
+- vergleicht den Kurs mit dem 200-Tage-SMA (199 Schlusskurse + aktueller Kurs, wie im Live-Chart) – für S&P 500 (`^GSPC`) und SOX (`^SOX`)
 - schickt eine Push-Nachricht über **ntfy** aufs Handy
   - täglich: kurzer Status (über/unter, Abstand in %, seit wann)
-  - bei einer **Kreuzung**: höchste Priorität mit 🚨
+  - bei einer **Kreuzung** (heute auf der anderen Seite als beim gestrigen Schluss): höchste Priorität mit 🚨
 - aktualisiert die Status-Webseite (`docs/`, über GitHub Pages)
 
-An Feiertagen ohne neuen Schlusskurs kommt keine Nachricht.
+An US-Feiertagen kommt keine Nachricht.
 
 ## Einrichtung (einmalig, ca. 5 Minuten)
 
@@ -31,13 +31,14 @@ An Feiertagen ohne neuen Schlusskurs kommt keine Nachricht.
 
 - **Nur bei Kreuzungen benachrichtigen**: Settings → Secrets and variables →
   Actions → Reiter *Variables* → `ONLY_ON_CROSS` = `true`.
-- **Uhrzeit ändern**: `cron` in `.github/workflows/sma-watch.yml` (Zeit in UTC).
+- **Uhrzeit ändern**: Die Cron-Zeiten in `.github/workflows/sma-watch.yml` (UTC) und
+  `CHECK_AFTER` (frühester Prüfzeitpunkt New Yorker Zeit, Standard 11:15) anpassen.
+- Ein manueller Lauf (*Run workflow*) prüft sofort, egal zu welcher Uhrzeit.
 
 ## Hinweise
 
 - Das Topic ist wie ein Passwort: wer es kennt, kann die Nachrichten mitlesen.
   Nicht öffentlich posten.
 - GitHub startet geplante Läufe manchmal 5–30 Minuten später.
-- Fällt ein Lauf aus, erkennt der nächste eine Kreuzung trotzdem (Vergleich mit
-  dem zuletzt gespeicherten Stand).
+- Kreuzung = heutiger Kurs auf der anderen Seite des SMA als der gestrige Schlusskurs.
 - Schlägt der Datenabruf fehl, kommt eine Warn-Nachricht und GitHub schickt eine E-Mail.

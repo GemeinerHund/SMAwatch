@@ -108,7 +108,7 @@
     <p id="updated">Lade Status …</p>
   </header>
   <div id="cards"></div>
-  <footer>S&amp;P 500 vs. 200-Tage-SMA · SOX vs. 160-Tage-SMA · Aktualisierung jeden US-Börsentag 2 Std. nach Handelsstart (ca. 17:30 Uhr)</footer>
+  <footer>S&amp;P 500 und SOX jeweils vs. 160-Tage-SMA · Aktualisierung jeden US-Börsentag 2 Std. nach Handelsstart (ca. 17:30 Uhr)</footer>
 </main>
 
 <script>
@@ -129,8 +129,8 @@ function card(key, name, r) {
   el.className = "card";
   const sign = r.diff_pct >= 0 ? "+" : "";
   const rule = key === "spx"
-    ? "BUY wenn S&amp;P &gt; SMA200 · sonst HOLD wenn SOX &gt; SMA160 · sonst SELL"
-    : "BUY wenn SOX &gt; SMA160 · sonst HOLD";
+    ? "BUY wenn S&amp;P &gt; SMA160 · sonst HOLD wenn SOX &gt; SMA160 · sonst SELL"
+    : "HOLD wenn SOX &gt; SMA160 · sonst BUY";
   el.innerHTML = `
     ${r.signal ? `<div class="sig ${r.signal}" aria-label="Signal ${r.signal}">${r.signal}</div><div class="rule">${rule}</div>` : ""}
     <div class="top">

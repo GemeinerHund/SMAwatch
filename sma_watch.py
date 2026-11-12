@@ -1,15 +1,15 @@
 #!/usr/bin/env python3
-"""SMA-Wächter: S&P 500 vs. 200d SMA, PHLX Semiconductor (SOX) vs. 160d SMA.
+"""SMA-Wächter: S&P 500 und PHLX Semiconductor (SOX), jeweils vs. 160d SMA.
 
 Läuft jeden US-Börsentag 2 Stunden nach Handelsstart (11:30 Uhr New York,
 = 17:30 Uhr deutscher Zeit) als GitHub Action. Vergleicht den aktuellen Kurs mit
-dem 200d SMA, schickt eine Push-Nachricht über ntfy und schreibt docs/status.json
+dem 160d SMA, schickt eine Push-Nachricht über ntfy und schreibt docs/status.json
 für die Status-Webseite.
 
 SMA-Berechnung: die letzten n-1 Schlusskurse plus der aktuelle Kurs, also so,
 wie ein Live-Chart (z. B. TradingView) den SMA im laufenden Handel zeigt.
-Signale: S&P 500 BUY wenn > SMA200; sonst HOLD wenn SOX > SMA160, sonst SELL.
-         SOX BUY wenn > SMA160, sonst HOLD.
+Signale: S&P 500 BUY wenn > SMA160; sonst HOLD wenn SOX > SMA160, sonst SELL.
+         SOX HOLD wenn > SMA160, sonst BUY.
 "Kreuzung" heißt: heute auf der anderen Seite als beim gestrigen Schlusskurs.
 
 Umgebungsvariablen:
@@ -33,16 +33,17 @@ import urllib.request
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
-MAX_SMA = 200  # längster SMA, bestimmt die benötigte Historie
 HISTORY_DAYS = 260  # ca. 1 Jahr für den Chart auf der Webseite
 STATUS_FILE = Path(__file__).parent / "docs" / "status.json"
 NY = ZoneInfo("America/New_York")
 BERLIN = ZoneInfo("Europe/Berlin")
 
 INDICES = [
-    {"key": "spx", "name": "S&P 500", "short": "S&P 500", "yahoo": "^GSPC", "stooq": "^spx", "sma": 200},
+    {"key": "spx", "name": "S&P 500", "short": "S&P 500", "yahoo": "^GSPC", "stooq": "^spx", "sma": 160},
     {"key": "sox", "name": "PHLX SOX (Halbleiter)", "short": "SOX", "yahoo": "^SOX", "stooq": "^sox", "sma": 160},
 ]
+
+MAX_SMA = max(i["sma"] for i in INDICES)  # längster SMA, bestimmt die benötigte Historie
 
 UA = ("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
       "(KHTML, like Gecko) Chrome/126.0 Safari/537.36")
@@ -160,12 +161,12 @@ def de_date(iso: str) -> str:
 
 
 def signals(results: dict) -> dict:
-    """S&P 500: BUY wenn > SMA200; sonst HOLD wenn SOX > SMA160, sonst SELL.
-    SOX: BUY wenn > SMA160, sonst HOLD."""
+    """S&P 500: BUY wenn > SMA160; sonst HOLD wenn SOX > SMA160, sonst SELL.
+    SOX: HOLD wenn > SMA160, sonst BUY."""
     out = {}
     spx, sox = results.get("spx"), results.get("sox")
     if sox:
-        out["sox"] = "BUY" if sox["above"] else "HOLD"
+        out["sox"] = "HOLD" if sox["above"] else "BUY"
     if spx:
         if spx["above"]:
             out["spx"] = "BUY"

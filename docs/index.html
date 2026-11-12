@@ -85,11 +85,14 @@
   .legend { display: flex; gap: 14px; font-size: 12px; color: var(--text-secondary); margin: 6px 0 2px; }
   .legend i { display: inline-block; width: 14px; height: 2px; vertical-align: middle; margin-right: 6px; border-radius: 2px; }
   .chart { position: relative; }
-  .chart svg { display: block; width: 100%; height: 190px; touch-action: pan-y; }
+  .chart svg { display: block; width: 100%; height: 190px; touch-action: none; -webkit-user-select: none; user-select: none; }
+  .hint { color: var(--text-muted); font-size: 11px; margin-top: 2px; }
+  .rtip { display: flex; gap: 12px; align-items: center; text-align: center; }
+  .rtip .chg { font-weight: 600; }
   .tip {
     position: absolute; pointer-events: none; background: var(--surface-1); border: 1px solid var(--border);
     border-radius: 8px; padding: 6px 8px; font-size: 12px; line-height: 1.35; white-space: nowrap;
-    box-shadow: 0 4px 14px rgba(0,0,0,.12); opacity: 0; transition: opacity .1s; top: 4px;
+    box-shadow: 0 4px 14px rgba(0,0,0,.12); opacity: 0; transition: opacity .1s; bottom: calc(100% + 2px); z-index: 2;
     font-variant-numeric: tabular-nums;
   }
   .tip .sw { display: inline-block; width: 8px; height: 8px; border-radius: 50%; margin-right: 5px; }
@@ -145,6 +148,7 @@ function card(key, name, r) {
     <div class="since">${r.crossed ? `<span class="cross">Seit gestern gekreuzt.</span> ` : ""}${up ? "Darüber" : "Darunter"} seit ${df(r.since)} (${r.streak_days} Handelstag${r.streak_days === 1 ? "" : "e"})</div>
     <div class="legend"><span><i style="background:var(--series-1)"></i>Kurs</span><span><i style="background:var(--series-2)"></i>SMA ${r.sma_len}</span></div>
     <div class="chart"><svg role="img" aria-label="${name}: Kurs und ${r.sma_len}-Tage-SMA, letzte 12 Monate"></svg><div class="tip"></div></div>
+    <div class="hint">1 Finger: Tageswert · 2 Finger: Veränderung in % (am PC: Maus ziehen)</div>
     <details><summary>Tabelle (letzte 20 Tage)</summary><table><thead><tr><th>Datum</th><th>Schluss</th><th>SMA ${r.sma_len}</th></tr></thead><tbody></tbody></table></details>`;
   const h = r.history;
   const tb = el.querySelector("tbody");
@@ -183,29 +187,98 @@ function drawChart(wrap, h, n_sma) {
     }
     lastM = m;
   });
+  const mk = (tag, attrs) => `<${tag} ${Object.entries(attrs).map(([k, v]) => `${k}="${v}"`).join(" ")}/>`;
   svg.innerHTML = g +
+    mk("rect", { class: "rng", y: T, height: H - T - B, opacity: 0 }) +
     `<path d="${path(h.sma)}" fill="none" stroke="${css("--series-2")}" stroke-width="2" stroke-linejoin="round"/>` +
     `<path d="${path(h.close)}" fill="none" stroke="${css("--series-1")}" stroke-width="2" stroke-linejoin="round"/>` +
-    `<line class="xh" y1="${T}" y2="${H - B}" stroke="${css("--text-muted")}" stroke-width="1" opacity="0"/>` +
-    `<circle class="d1" r="4" fill="${css("--series-1")}" stroke="${css("--surface-1")}" stroke-width="2" opacity="0"/>` +
-    `<circle class="d2" r="4" fill="${css("--series-2")}" stroke="${css("--surface-1")}" stroke-width="2" opacity="0"/>`;
+    mk("path", { class: "seg", fill: "none", "stroke-width": 2.5, "stroke-linejoin": "round", opacity: 0 }) +
+    mk("line", { class: "xh", y1: T, y2: H - B, stroke: css("--text-muted"), "stroke-width": 1, opacity: 0 }) +
+    mk("line", { class: "xa", y1: T, y2: H - B, "stroke-width": 1.5, "stroke-dasharray": "4 3", opacity: 0 }) +
+    mk("line", { class: "xb", y1: T, y2: H - B, "stroke-width": 1.5, "stroke-dasharray": "4 3", opacity: 0 }) +
+    mk("circle", { class: "d1", r: 4, fill: css("--series-1"), stroke: css("--surface-1"), "stroke-width": 2, opacity: 0 }) +
+    mk("circle", { class: "d2", r: 4, fill: css("--series-2"), stroke: css("--surface-1"), "stroke-width": 2, opacity: 0 }) +
+    mk("circle", { class: "ca", r: 4.5, fill: css("--surface-1"), "stroke-width": 2.5, opacity: 0 }) +
+    mk("circle", { class: "cb", r: 4.5, fill: css("--surface-1"), "stroke-width": 2.5, opacity: 0 });
 
-  const xh = svg.querySelector(".xh"), d1 = svg.querySelector(".d1"), d2 = svg.querySelector(".d2");
-  const show = ev => {
+  const q = c => svg.querySelector("." + c);
+  const [xh, d1, d2, rng, seg, xa, xb, ca, cb] = ["xh", "d1", "d2", "rng", "seg", "xa", "xb", "ca", "cb"].map(q);
+  const set = (el, a) => { for (const k in a) el.setAttribute(k, a[k]); };
+  const single = [xh, d1, d2], range = [rng, seg, xa, xb, ca, cb];
+  const off = els => els.forEach(e => e.setAttribute("opacity", 0));
+
+  const idxAt = clientX => {
     const rect = svg.getBoundingClientRect();
-    const px = (ev.clientX - rect.left) * (W / rect.width);
-    const i = Math.max(0, Math.min(n - 1, Math.round((px - L) / (W - L - R) * (n - 1))));
-    const xi = x(i);
-    xh.setAttribute("x1", xi); xh.setAttribute("x2", xi); xh.setAttribute("opacity", 1);
-    d1.setAttribute("cx", xi); d1.setAttribute("cy", y(h.close[i])); d1.setAttribute("opacity", 1);
-    d2.setAttribute("cx", xi); d2.setAttribute("cy", y(h.sma[i])); d2.setAttribute("opacity", 1);
-    tip.innerHTML = `<b>${df(h.dates[i])}</b><br><span class="sw" style="background:var(--series-1)"></span>Kurs ${nf(h.close[i])}<br><span class="sw" style="background:var(--series-2)"></span>SMA ${n_sma} ${nf(h.sma[i])}`;
-    const tw = tip.offsetWidth, sx = xi * rect.width / W;
-    tip.style.left = Math.min(rect.width - tw, Math.max(0, sx + (sx > rect.width / 2 ? -tw - 10 : 10))) + "px";
+    const px = (clientX - rect.left) * (W / rect.width);
+    return Math.max(0, Math.min(n - 1, Math.round((px - L) / (W - L - R) * (n - 1))));
+  };
+  const placeTip = (sx, center) => {
+    const rect = svg.getBoundingClientRect(), tw = tip.offsetWidth;
+    const left = center ? sx - tw / 2 : sx + (sx > rect.width / 2 ? -tw - 10 : 10);
+    tip.style.left = Math.min(rect.width - tw, Math.max(0, left)) + "px";
     tip.style.opacity = 1;
   };
-  const hide = () => { tip.style.opacity = 0; [xh, d1, d2].forEach(e => e.setAttribute("opacity", 0)); };
-  svg.onpointermove = show; svg.onpointerdown = show; svg.onpointerleave = hide;
+
+  // Ein Finger / Maus-Hover: Wert an einem Tag
+  const showSingle = i => {
+    off(range);
+    const xi = x(i);
+    set(xh, { x1: xi, x2: xi, opacity: 1 });
+    set(d1, { cx: xi, cy: y(h.close[i]), opacity: 1 });
+    set(d2, { cx: xi, cy: y(h.sma[i]), opacity: 1 });
+    tip.innerHTML = `<b>${df(h.dates[i])}</b><br><span class="sw" style="background:var(--series-1)"></span>Kurs ${nf(h.close[i])}<br><span class="sw" style="background:var(--series-2)"></span>SMA ${n_sma} ${nf(h.sma[i])}`;
+    placeTip(xi * svg.getBoundingClientRect().width / W, false);
+  };
+
+  // Zwei Finger / Maus ziehen: Veränderung zwischen zwei Tagen
+  const showRange = (i, j) => {
+    if (i > j) [i, j] = [j, i];
+    if (i === j) return showSingle(i);
+    off(single);
+    const a = h.close[i], b = h.close[j], diff = b - a, pct = diff / a * 100;
+    const col = css(diff >= 0 ? "--good" : "--critical");
+    const xi = x(i), xj = x(j);
+    set(rng, { x: xi, width: xj - xi, fill: col, opacity: 0.12 });
+    const segD = h.close.slice(i, j + 1).map((v, k) => (k ? "L" : "M") + x(i + k).toFixed(1) + " " + y(v).toFixed(1)).join("");
+    set(seg, { d: segD, stroke: col, opacity: 1 });
+    set(xa, { x1: xi, x2: xi, stroke: col, opacity: 1 });
+    set(xb, { x1: xj, x2: xj, stroke: col, opacity: 1 });
+    set(ca, { cx: xi, cy: y(a), stroke: col, opacity: 1 });
+    set(cb, { cx: xj, cy: y(b), stroke: col, opacity: 1 });
+    const sg = diff >= 0 ? "+" : "−";
+    tip.innerHTML = `<div class="rtip"><span>${df(h.dates[i])}<br><b>${nf(a)}</b></span>` +
+      `<span class="chg" style="color:${col}">${sg}${nf(Math.abs(pct), 2)} %<br><b>${sg}${nf(Math.abs(diff))}</b></span>` +
+      `<span>${df(h.dates[j])}<br><b>${nf(b)}</b></span></div>`;
+    placeTip((xi + xj) / 2 * svg.getBoundingClientRect().width / W, true);
+  };
+
+  const hide = () => { tip.style.opacity = 0; off(single); off(range); };
+
+  const pts = new Map();   // aktive Finger/Maustaste: pointerId -> clientX
+  let anchor = null;        // Maus: Startpunkt beim Ziehen
+  const render = () => {
+    const xs = [...pts.values()];
+    if (xs.length >= 2) showRange(idxAt(xs[0]), idxAt(xs[1]));
+    else if (xs.length === 1 && anchor !== null) showRange(idxAt(anchor), idxAt(xs[0]));
+    else if (xs.length === 1) showSingle(idxAt(xs[0]));
+  };
+  svg.onpointerdown = e => {
+    svg.setPointerCapture(e.pointerId);
+    pts.set(e.pointerId, e.clientX);
+    if (e.pointerType === "mouse") anchor = e.clientX;
+    render();
+  };
+  svg.onpointermove = e => {
+    if (pts.has(e.pointerId)) { pts.set(e.pointerId, e.clientX); render(); }
+    else if (e.pointerType === "mouse") showSingle(idxAt(e.clientX));
+  };
+  const end = e => {
+    pts.delete(e.pointerId);
+    if (e.pointerType === "mouse") { anchor = null; return; }
+    if (pts.size === 0) hide(); else render();
+  };
+  svg.onpointerup = end; svg.onpointercancel = end;
+  svg.onpointerleave = e => { if (e.pointerType === "mouse" && !pts.size) hide(); };
 }
 
 load().then(s => {

@@ -3,7 +3,8 @@
 Läuft jeden US-Börsentag **2 Stunden nach Handelsstart** (11:30 Uhr New York = ca. 17:30 Uhr deutscher Zeit) als GitHub Action:
 
 - holt den aktuellen Kurs plus die Tagesschlusskurse (Yahoo Finance, Ersatzquelle Stooq)
-- vergleicht den Kurs mit dem 200-Tage-SMA (199 Schlusskurse + aktueller Kurs, wie im Live-Chart) – für S&P 500 (`^GSPC`) und SOX (`^SOX`)
+- vergleicht den Kurs mit dem SMA (n-1 Schlusskurse + aktueller Kurs, wie im Live-Chart):
+  S&P 500 (`^GSPC`) mit dem **200d SMA**, SOX (`^SOX`) mit dem **160d SMA**
 - setzt Signale:
   - **S&P 500**: BUY wenn S&P > SMA200 · HOLD wenn S&P < SMA200 und SOX > SMA160 · SELL wenn S&P < SMA200 und SOX < SMA160
   - **SOX**: BUY wenn SOX > SMA160 · HOLD wenn SOX < SMA160
